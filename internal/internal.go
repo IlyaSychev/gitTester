@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"fmt"
 	"image"
 	"image/color"
 	"image/png"
@@ -13,19 +12,18 @@ import (
 const Cycle = 60 * 60 * 6
 
 type Point struct {
-	x        float64
-	y        float64
-	h        float64
-	Path     [][]float64
-	RealPath [][]float64
-	realX    float64
-	realY    float64
+	x                float64
+	y                float64
+	h                float64
+	Path             [][]float64
+	EnterAndExitTime map[int]float64
+	PercentTimeEnter float64
 }
 
 func NewPoint(startX, startY, startH float64) *Point {
 	tmp := make([][]float64, 0)
 	tmp = append(tmp, []float64{startX, startY, startH})
-	return &Point{startX, startY, startH, tmp, tmp, startX, startY}
+	return &Point{startX, startY, startH, tmp, map[int]float64{}, 0}
 }
 
 func (aerostat *Point) Polinom(VelocitiesBefore, VelocitiesAfter map[[3]float64][3]float64, dt float64, i float64) {
@@ -56,6 +54,7 @@ func (aerostat *Point) Polinom(VelocitiesBefore, VelocitiesAfter map[[3]float64]
 	//fmt.Println("local eta1 = ", eta)
 	//fmt.Println("local ksi = ", ksi)
 	//fmt.Println("local nu = ", nu)
+	//fmt.Println()
 
 	fnForm1 := (ksi + 1) * (eta - 1) * (nu - 1) / 8
 	fnForm2 := (-1) * 1 * (ksi + 1) * (eta + 1) * (nu - 1) / 8
@@ -83,13 +82,9 @@ func (aerostat *Point) Polinom(VelocitiesBefore, VelocitiesAfter map[[3]float64]
 
 	//fmt.Println("u, v , hvel = ", u, v, hvel)
 
-	aerostat.x = aerostat.x + metresToDegrees(aerostat.y, u*dt)
-	aerostat.y = aerostat.y + metresToDegrees(0, v*dt)
+	aerostat.x = aerostat.x + MetresToDegrees(aerostat.y, u*dt)
+	aerostat.y = aerostat.y + MetresToDegrees(0, v*dt)
 	//aerostat.h = aerostat.h + hvel*dt
-
-	aerostat.realX = aerostat.realX + metresToDegrees(aerostat.y, u*dt)
-	aerostat.realY = aerostat.realY + metresToDegrees(0, v*dt)
-	aerostat.RealPath = append(aerostat.RealPath, []float64{aerostat.realX, aerostat.realY})
 
 	if aerostat.y > 90 {
 		aerostat.y = 90 - math.Mod(aerostat.y, 90)
@@ -117,7 +112,13 @@ func round(coordinate float64) (float64, float64) {
 	return coordinateMin, coordinateMax
 }
 
-func metresToDegrees(y, S float64) float64 {
+func round05(coordinate float64) (float64, float64) {
+	coordinateMin := math.Floor(coordinate*2) / 2
+	coordinateMax := coordinateMin + 0.5
+	return coordinateMin, coordinateMax
+}
+
+func MetresToDegrees(y, S float64) float64 {
 	return S / (math.Pi * 6378000 / 180 * math.Cos(y/180*math.Pi))
 }
 
@@ -139,7 +140,7 @@ func FindApproxTimeVelocity(VelocitiesBefore, VelocitiesAfter map[[3]float64][3]
 	V6 := VelocitiesBefore[[3]float64{x2, y2, h2}][component] + (VelocitiesAfter[[3]float64{x2, y2, h2}][component]-VelocitiesBefore[[3]float64{x2, y2, h2}][component])/Cycle*dt*i
 	V7 := VelocitiesBefore[[3]float64{x1, y1, h2}][component] + (VelocitiesAfter[[3]float64{x1, y1, h2}][component]-VelocitiesBefore[[3]float64{x1, y1, h2}][component])/Cycle*dt*i
 	V8 := VelocitiesBefore[[3]float64{x2, y1, h2}][component] + (VelocitiesAfter[[3]float64{x2, y1, h2}][component]-VelocitiesBefore[[3]float64{x2, y1, h2}][component])/Cycle*dt*i
-	fmt.Println("VxBefore VxAfter i", VelocitiesBefore[[3]float64{x1, y2, h1}][component], VelocitiesAfter[[3]float64{x1, y2, h1}][component], i, V1)
+	//fmt.Println("VxBefore VxAfter i", VelocitiesBefore[[3]float64{x1, y2, h1}][component], VelocitiesAfter[[3]float64{x1, y2, h1}][component], i, V1)
 	return V1, V2, V3, V4, V5, V6, V7, V8
 }
 
@@ -169,10 +170,7 @@ func CreateImage(arr [][]float64) error {
 	for i := range arr {
 		x1 := int(arr[i][0] * 3)
 		y1 := int(math.Abs(arr[i][1]*3 - 270))
-		//x2 := x1 + int(float64(arrOfVel[i][0]))
-		//y2 := y1 - int((float64(arrOfVel[i][1])))
 		newImg.Set(x1, y1, color.RGBA{255, 0, 0, 255}) // Рисуем красную точку
-		//drawLine(newImg, x1, y1, x2, y2, color.RGBA{255, 0, 0, 255})
 	}
 
 	// Сохранить копию изображения в новый файл
@@ -183,4 +181,8 @@ func CreateImage(arr [][]float64) error {
 	defer out.Close()
 
 	return png.Encode(out, newImg)
+}
+
+func (p *Point) GetCoordinates() (float64, float64, float64) {
+	return p.x, p.y, p.h
 }
